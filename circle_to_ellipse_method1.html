@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Circle to Ellipse — Method 1 Explainer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f8f7f4;
+    color: #2c2c2a;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 2rem 1rem;
+  }
+  .page { max-width: 680px; width: 100%; }
+  h1 { font-size: 20px; font-weight: 500; margin-bottom: 0.4rem; }
+  .subtitle { font-size: 14px; color: #5f5e5a; margin-bottom: 1.5rem; line-height: 1.5; }
+  .controls { display: flex; flex-direction: column; gap: 12px; margin-bottom: 1.5rem; }
+  .ctrl-row { display: flex; align-items: center; gap: 12px; }
+  label { font-size: 13px; color: #5f5e5a; width: 130px; flex-shrink: 0; }
+  input[type=range] {
+    flex: 1;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #d3d1c7;
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #378ADD;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #378ADD;
+  }
+  .val { font-size: 14px; font-weight: 500; min-width: 40px; text-align: right; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  @media (max-width: 480px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat { background: #fff; border: 0.5px solid #d3d1c7; border-radius: 8px; padding: 0.75rem 1rem; }
+  .stat-label { font-size: 11px; color: #888780; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .stat-value { font-size: 18px; font-weight: 500; }
+  .accent { color: #378ADD; }
+  .coral  { color: #D85A30; }
+  canvas { display: block; width: 100%; border-radius: 10px; }
+  .note {
+    font-size: 13px; color: #444441;
+    padding: 0.75rem 1rem;
+    background: #e6f1fb;
+    border-radius: 8px;
+    border-left: 3px solid #378ADD;
+    margin-top: 1rem;
+    line-height: 1.5;
+    min-height: 48px;
+  }
+  .legend { display: flex; gap: 1.5rem; margin-top: 1rem; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #5f5e5a; }
+  .swatch { width: 24px; height: 3px; border-radius: 2px; }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a18; color: #d3d1c7; }
+    .stat { background: #2c2c2a; border-color: #444441; }
+    .stat-label { color: #888780; }
+    input[type=range] { background: #444441; }
+    .note { background: #0c447c22; border-color: #378ADD; color: #b5d4f4; }
+    .legend-item { color: #888780; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Circle → ellipse under surface tilt</h1>
+  <p class="subtitle">
+    Under the flat-surface affine model, tilting a circle around a hinge axis produces an ellipse
+    whose <strong>major axis always equals the true circle diameter</strong>. This is why Method 1
+    reads px/mm directly from the major axis — no rectification is needed.
+  </p>
+
+  <div class="controls">
+    <div class="ctrl-row">
+      <label>Tilt angle</label>
+      <input type="range" id="tilt" min="0" max="80" value="0" step="1">
+      <span class="val accent" id="tilt-val">0°</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Hinge direction</label>
+      <input type="range" id="hinge" min="0" max="180" value="0" step="1">
+      <span class="val" id="hinge-val">0°</span>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">True diameter</div>
+      <div class="stat-value accent" id="s-true">100 px</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Major axis</div>
+      <div class="stat-value accent" id="s-major">100 px</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Minor axis</div>
+      <div class="stat-value coral" id="s-minor">100 px</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Major = diameter?</div>
+      <div class="stat-value" id="s-check" style="color:#1D9E75">✓ yes</div>
+    </div>
+  </div>
+
+  <canvas id="c" height="360"></canvas>
+
+  <div class="legend">
+    <div class="legend-item"><div class="swatch" style="background:#EF9F27"></div> major axis (= true diameter)</div>
+    <div class="legend-item"><div class="swatch" style="background:#D85A30; border-top: 2px dashed #D85A30; height:0"></div> minor axis (foreshortened)</div>
+    <div class="legend-item"><div class="swatch" style="background:#378ADD; height:3px"></div> projected ellipse</div>
+  </div>
+
+  <div class="note" id="note">
+    Drag the tilt slider to see the circle compress into an ellipse. The major axis (yellow) stays locked at the true diameter.
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const TRUE_D = 100;
+const R      = TRUE_D / 2;
+
+function resize() {
+  const w = canvas.parentElement.clientWidth;
+  canvas.width  = w;
+  canvas.height = Math.round(w * 0.52);
+}
+
+function arrowHead(x1, y1, x2, y2, col) {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const len   = 9;
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - len * Math.cos(angle - 0.4), y2 - len * Math.sin(angle - 0.4));
+  ctx.lineTo(x2 - len * Math.cos(angle + 0.4), y2 - len * Math.sin(angle + 0.4));
+  ctx.closePath();
+  ctx.fill();
+}
+
+function draw() {
+  const tiltDeg  = parseFloat(document.getElementById('tilt').value);
+  const hingeDeg = parseFloat(document.getElementById('hinge').value);
+  const tilt     = tiltDeg  * Math.PI / 180;
+  const hinge    = hingeDeg * Math.PI / 180;
+  const cosT     = Math.cos(tilt);
+
+  const W  = canvas.width;
+  const H  = canvas.height;
+  const cx = W / 2;
+  const cy = H / 2;
+  const scale  = Math.min(W, H) / 4.0;
+  const r      = R / 100 * scale;
+
+  const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const colBg    = dark ? '#1a1a18' : '#f0eeea';
+  const colGrid  = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+  const colFill  = dark ? 'rgba(55,138,221,0.20)' : 'rgba(55,138,221,0.13)';
+  const colEdge  = '#378ADD';
+  const colMinor = '#D85A30';
+  const colMajor = '#EF9F27';
+  const colText  = dark ? '#b4b2a9' : '#5f5e5a';
+
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.fillStyle = colBg;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, W, H, 10);
+  ctx.fill();
+
+  for (let g = -5; g <= 5; g++) {
+    ctx.strokeStyle = colGrid;
+    ctx.lineWidth   = 1;
+    ctx.beginPath(); ctx.moveTo(cx + g * scale * 0.75, 0); ctx.lineTo(cx + g * scale * 0.75, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, cy + g * scale * 0.75); ctx.lineTo(W, cy + g * scale * 0.75); ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(hinge);
+  ctx.scale(1, cosT);
+  ctx.rotate(-hinge);
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fillStyle = colFill;
+  ctx.fill();
+  ctx.strokeStyle = colEdge;
+  ctx.lineWidth   = 2;
+  ctx.stroke();
+  ctx.restore();
+
+  const cos_h  = Math.cos(hinge);
+  const sin_h  = Math.sin(hinge);
+  const semi_a = r;
+  const semi_b = r * cosT;
+
+  const ax = cos_h * semi_a;
+  const ay = sin_h * semi_a;
+  const bx = -sin_h * semi_b;
+  const by =  cos_h * semi_b;
+
+  ctx.strokeStyle = colMajor;
+  ctx.lineWidth   = 2.5;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(cx - ax, cy - ay);
+  ctx.lineTo(cx + ax, cy + ay);
+  ctx.stroke();
+  arrowHead(cx - ax, cy - ay, cx + ax, cy + ay, colMajor);
+  arrowHead(cx + ax, cy + ay, cx - ax, cy - ay, colMajor);
+
+  if (tiltDeg > 1) {
+    ctx.strokeStyle = colMinor;
+    ctx.lineWidth   = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(cx - bx, cy - by);
+    ctx.lineTo(cx + bx, cy + by);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.font      = '12px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+
+  if (tiltDeg > 4) {
+    const lx = cx + ax * 1.22;
+    const ly = cy + ay * 1.22;
+    ctx.fillStyle = colMajor;
+    ctx.fillText('major axis = true ⌀', lx, ly > cy ? Math.min(ly + 16, H - 14) : Math.max(ly - 8, 18));
+
+    if (semi_b < semi_a * 0.97) {
+      const mx = cx + bx * 1.45;
+      const my = cy + by * 1.45;
+      ctx.fillStyle = colMinor;
+      ctx.fillText('minor axis', mx, my > cy ? Math.min(my + 16, H - 28) : Math.max(my - 8, 34));
+    }
+  }
+
+  const majorPxDisplay = (semi_a * 2 / scale * 100).toFixed(1);
+  const minorPxDisplay = (semi_b * 2 / scale * 100).toFixed(1);
+  const majorMatch     = Math.abs(parseFloat(majorPxDisplay) - TRUE_D) < 0.6;
+
+  document.getElementById('s-true').textContent  = TRUE_D + ' px';
+  document.getElementById('s-major').textContent = majorPxDisplay + ' px';
+  document.getElementById('s-minor').textContent = minorPxDisplay + ' px';
+  const chk = document.getElementById('s-check');
+  chk.textContent = majorMatch ? '✓ yes' : '✗ no';
+  chk.style.color  = majorMatch ? '#1D9E75' : '#D85A30';
+
+  let note;
+  if (tiltDeg === 0) {
+    note = 'No tilt — the projected shape is a perfect circle. Major and minor axes are equal to the true diameter.';
+  } else if (tiltDeg < 20) {
+    note = `${tiltDeg}° tilt. The circle is beginning to foreshorten into an ellipse. The major axis (yellow) still equals the true diameter (${majorPxDisplay} px).`;
+  } else if (tiltDeg < 50) {
+    note = `${tiltDeg}° tilt. The minor axis has compressed to ${minorPxDisplay} px — cos(${tiltDeg}°) = ${cosT.toFixed(2)} of the true diameter. The major axis remains ${majorPxDisplay} px = true diameter. px/mm = major axis / real size.`;
+  } else {
+    note = `Steep ${tiltDeg}° tilt. The ellipse is heavily compressed along the minor axis (${minorPxDisplay} px). But the major axis is still ${majorPxDisplay} px = true diameter. Method 1 reads this directly — no rectification needed for the scale factor.`;
+  }
+  document.getElementById('note').textContent = note;
+}
+
+resize();
+draw();
+
+document.getElementById('tilt').addEventListener('input', function() {
+  document.getElementById('tilt-val').textContent = this.value + '°';
+  draw();
+});
+document.getElementById('hinge').addEventListener('input', function() {
+  document.getElementById('hinge-val').textContent = this.value + '°';
+  draw();
+});
+window.addEventListener('resize', () => { resize(); draw(); });
+</script>
+</body>
+</html>
